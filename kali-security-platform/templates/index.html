@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kali Security Scanner - Professional Penetration Testing Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .scan-button {
+            background: linear-gradient(90deg, #00d2ff 0%, #3a47d5 100%);
+            transition: all 0.3s ease;
+        }
+        .scan-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 40px rgba(0, 210, 255, 0.4);
+        }
+        .terminal {
+            background: #1a1a2e;
+            color: #0fff50;
+            font-family: 'Courier New', monospace;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <!-- Header -->
+    <nav class="bg-gray-900 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-shield-alt text-3xl text-blue-400"></i>
+                <h1 class="text-2xl font-bold">Kali Security Scanner</h1>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container mx-auto mt-10 p-6">
+        <!-- Quick Scan Card -->
+        <div class="bg-white rounded-2xl shadow-2xl p-8 mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">
+                <i class="fas fa-crosshairs text-blue-500"></i> Quick Security Scan
+            </h2>
+            
+            <!-- Target Input -->
+            <div class="flex space-x-4 mb-6">
+                <input type="text" 
+                       id="target-url" 
+                       placeholder="Enter URL, IP or Domain (e.g., scanme.nmap.org, 192.168.1.1)"
+                       class="flex-1 px-6 py-4 text-lg border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none">
+                
+                <button onclick="startScan()" class="scan-button text-white px-8 py-4 rounded-xl font-bold text-lg">
+                    <i class="fas fa-play-circle"></i> Start Scan
+                </button>
+            </div>
+
+            <!-- Terminal Output -->
+            <div class="terminal rounded-lg p-4 mb-6" id="terminal-output">
+                <div id="terminal-content">
+                    <span class="text-green-400">$ Ready for scanning...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function startScan() {
+            const target = document.getElementById('target-url').value;
+            if (!target) {
+                alert('Please enter a target');
+                return;
+            }
+
+            const terminal = document.getElementById('terminal-content');
+            terminal.innerHTML = `<span class="text-green-400">$ Scanning ${target}...</span><br>`;
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: target})
+                });
+
+                const data = await response.json();
+                terminal.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                terminal.innerHTML += `<span class="text-red-400">Error: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

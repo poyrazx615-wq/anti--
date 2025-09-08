@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # Main application
+  kali-platform:
+    build: .
+    container_name: kali-security-platform
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      - ./security_tools.db:/app/security_tools.db
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - ENABLE_TOOL_EXECUTION=true
+    networks:
+      - kali-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  kali-network:
+    driver: bridge
+
+volumes:
+  platform_data:
+    driver: local

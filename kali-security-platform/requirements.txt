@@ -1,0 +1,56 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+asyncpg==0.29.0
+
+# Security & Networking
+python-nmap==0.7.1
+requests==2.31.0
+aiohttp==3.9.1
+paramiko==3.3.1
+cryptography==41.0.7
+
+# PDF Generation
+reportlab==4.0.7
+PyPDF2==3.0.1
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+pydantic==2.5.2
+
+# Web & API
+httpx==0.25.2
+websockets==12.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+bcrypt==4.1.2
+
+# Parsing & Validation
+beautifulsoup4==4.12.2
+lxml==4.9.3
+pyyaml==6.0.1
+jsonschema==4.20.0
+validators==0.22.0
+dnspython==2.4.2
+
+# CLI & Terminal
+click==8.1.7
+rich==13.7.0
+colorama==0.4.6
+
+# Redis Cache (Optional)
+redis==5.0.1
+
+# OSINT Tools
+shodan==1.30.1
+censys==2.2.8
+
+# Additional Security Tools
+python-whois==0.8.0

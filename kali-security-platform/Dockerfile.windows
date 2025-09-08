@@ -1,0 +1,29 @@
+# Windows-compatible Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install basic tools that work on Windows containers
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create directories
+RUN mkdir -p outputs/scans outputs/reports logs
+
+EXPOSE 8000
+
+# Windows-compatible health check
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["python", "main.py"]

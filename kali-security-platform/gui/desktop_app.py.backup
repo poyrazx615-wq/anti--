@@ -1,0 +1,884 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Kali Security Platform - Desktop GUI Application
+Modern PyQt5 Interface for Penetration Testing
+"""
+
+import sys
+import os
+import json
+import asyncio
+from datetime import datetime
+from pathlib import Path
+
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+import qtawesome as qta
+
+# Dark theme stylesheet
+DARK_STYLE = """
+QWidget {
+    background-color: #1a1a2e;
+    color: #eee;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+}
+
+QMainWindow {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #1a1a2e, stop:1 #16213e);
+}
+
+QPushButton {
+    background-color: #7f39fb;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    color: white;
+}
+
+QPushButton:hover {
+    background-color: #8b5cf6;
+}
+
+QPushButton:pressed {
+    background-color: #6d28d9;
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {
+    background-color: #0f0f23;
+    border: 1px solid #7f39fb;
+    padding: 8px;
+    border-radius: 5px;
+    color: #fff;
+}
+
+QTableWidget {
+    background-color: #0f0f23;
+    alternate-background-color: #1a1a2e;
+    gridline-color: #2d2d44;
+    border: 1px solid #7f39fb;
+    border-radius: 5px;
+}
+
+QTableWidget::item {
+    padding: 5px;
+}
+
+QTableWidget::item:selected {
+    background-color: #7f39fb;
+}
+
+QHeaderView::section {
+    background-color: #16213e;
+    color: white;
+    padding: 8px;
+    border: none;
+    font-weight: bold;
+}
+
+QTabWidget::pane {
+    border: 1px solid #7f39fb;
+    background-color: #0f0f23;
+    border-radius: 5px;
+}
+
+QTabBar::tab {
+    background-color: #16213e;
+    color: #aaa;
+    padding: 10px 20px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background-color: #7f39fb;
+    color: white;
+}
+
+QProgressBar {
+    border: 1px solid #7f39fb;
+    border-radius: 5px;
+    text-align: center;
+    background-color: #0f0f23;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #7f39fb, stop:1 #8b5cf6);
+    border-radius: 5px;
+}
+
+QGroupBox {
+    border: 2px solid #7f39fb;
+    border-radius: 5px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 10px;
+    background-color: #1a1a2e;
+    color: #8b5cf6;
+}
+
+QCheckBox, QRadioButton {
+    spacing: 10px;
+}
+
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #7f39fb;
+    border-radius: 3px;
+    background-color: #0f0f23;
+}
+
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    background-color: #7f39fb;
+}
+
+QScrollBar:vertical {
+    background-color: #0f0f23;
+    width: 12px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #7f39fb;
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #8b5cf6;
+}
+
+QMenu {
+    background-color: #16213e;
+    border: 1px solid #7f39fb;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+QMenu::item {
+    padding: 8px 20px;
+    border-radius: 3px;
+}
+
+QMenu::item:selected {
+    background-color: #7f39fb;
+}
+
+QStatusBar {
+    background-color: #16213e;
+    color: #aaa;
+    border-top: 1px solid #7f39fb;
+}
+"""
+
+class WorkerThread(QThread):
+    """Worker thread for async operations"""
+    progress = pyqtSignal(int)
+    message = pyqtSignal(str)
+    finished = pyqtSignal(dict)
+    
+    def __init__(self, task, params):
+        super().__init__()
+        self.task = task
+        self.params = params
+        
+    def run(self):
+        """Run the task"""
+        try:
+            # Simulate task execution
+            for i in range(101):
+                self.progress.emit(i)
+                self.message.emit(f"Processing... {i}%")
+                self.msleep(50)
+            
+            result = {"success": True, "data": "Task completed"}
+            self.finished.emit(result)
+        except Exception as e:
+            self.finished.emit({"success": False, "error": str(e)})
+
+
+class ScanWidget(QWidget):
+    """Scan configuration and control widget"""
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        # Target input
+        target_group = QGroupBox("Hedef Bilgileri")
+        target_layout = QFormLayout()
+        
+        self.target_input = QLineEdit()
+        self.target_input.setPlaceholderText("example.com veya 192.168.1.1")
+        target_layout.addRow("Hedef:", self.target_input)
+        
+        self.scan_type = QComboBox()
+        self.scan_type.addItems([
+            "Full Scan - Kapsamlı Tarama",
+            "Quick Scan - Hızlı Tarama",
+            "Web Application - Web Uygulaması",
+            "Network Discovery - Ağ Keşfi",
+            "Vulnerability Assessment - Zafiyet Değerlendirme"
+        ])
+        target_layout.addRow("Tarama Türü:", self.scan_type)
+        
+        self.aggressiveness = QSlider(Qt.Horizontal)
+        self.aggressiveness.setRange(1, 5)
+        self.aggressiveness.setValue(3)
+        self.aggressiveness.setTickPosition(QSlider.TicksBelow)
+        self.aggressiveness.setTickInterval(1)
+        target_layout.addRow("Agresiflik:", self.aggressiveness)
+        
+        target_group.setLayout(target_layout)
+        layout.addWidget(target_group)
+        
+        # Tools selection
+        tools_group = QGroupBox("Kali Araçları")
+        tools_layout = QVBoxLayout()
+        
+        self.tools = {}
+        tool_list = [
+            ("Nmap", "Port Tarama", True),
+            ("Nikto", "Web Tarama", True),
+            ("SQLMap", "SQL Injection", True),
+            ("Metasploit", "Exploitation", False),
+            ("Hydra", "Brute Force", False),
+            ("Dirb", "Directory Discovery", False),
+            ("Burp Suite", "Web Testing", False),
+            ("John", "Password Cracking", False)
+        ]
+        
+        for tool, desc, checked in tool_list:
+            checkbox = QCheckBox(f"{tool} - {desc}")
+            checkbox.setChecked(checked)
+            self.tools[tool] = checkbox
+            tools_layout.addWidget(checkbox)
+            
+        tools_group.setLayout(tools_layout)
+        layout.addWidget(tools_group)
+        
+        # Control buttons
+        button_layout = QHBoxLayout()
+        
+        self.start_btn = QPushButton(qta.icon('fa.play', color='white'), "Taramayı Başlat")
+        self.start_btn.clicked.connect(self.start_scan)
+        button_layout.addWidget(self.start_btn)
+        
+        self.stop_btn = QPushButton(qta.icon('fa.stop', color='white'), "Durdur")
+        self.stop_btn.setEnabled(False)
+        button_layout.addWidget(self.stop_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        layout.addWidget(self.progress_bar)
+        
+        # Terminal output
+        self.terminal = QPlainTextEdit()
+        self.terminal.setReadOnly(True)
+        self.terminal.setMaximumBlockCount(1000)
+        self.terminal.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #000;
+                color: #0f0;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 12px;
+            }
+        """)
+        layout.addWidget(self.terminal)
+        
+        self.setLayout(layout)
+        
+    def start_scan(self):
+        """Start scanning process"""
+        target = self.target_input.text()
+        if not target:
+            QMessageBox.warning(self, "Uyarı", "Lütfen hedef girin!")
+            return
+            
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        
+        # Get selected tools
+        selected_tools = [name for name, checkbox in self.tools.items() if checkbox.isChecked()]
+        
+        # Start worker thread
+        self.worker = WorkerThread("scan", {
+            "target": target,
+            "tools": selected_tools,
+            "scan_type": self.scan_type.currentText()
+        })
+        
+        self.worker.progress.connect(self.update_progress)
+        self.worker.message.connect(self.update_terminal)
+        self.worker.finished.connect(self.scan_finished)
+        self.worker.start()
+        
+        self.terminal.appendPlainText(f"[*] Tarama başlatılıyor: {target}")
+        self.terminal.appendPlainText(f"[*] Seçilen araçlar: {', '.join(selected_tools)}")
+        
+    def update_progress(self, value):
+        """Update progress bar"""
+        self.progress_bar.setValue(value)
+        
+    def update_terminal(self, message):
+        """Update terminal output"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.terminal.appendPlainText(f"[{timestamp}] {message}")
+        
+    def scan_finished(self, result):
+        """Handle scan completion"""
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        
+        if result["success"]:
+            self.terminal.appendPlainText("[+] Tarama başarıyla tamamlandı!")
+            QMessageBox.information(self, "Başarılı", "Tarama tamamlandı!")
+        else:
+            self.terminal.appendPlainText(f"[!] Hata: {result['error']}")
+            QMessageBox.critical(self, "Hata", f"Tarama başarısız: {result['error']}")
+
+
+class DashboardWidget(QWidget):
+    """Dashboard with statistics and charts"""
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        # Stats cards
+        stats_layout = QHBoxLayout()
+        
+        stats = [
+            ("Toplam Tarama", "1,847", "fa.radar", "#7f39fb"),
+            ("Aktif Tarama", "7", "fa.sync", "#fbbf24"),
+            ("Kritik Zafiyet", "23", "fa.bug", "#ef4444"),
+            ("Sistem Durumu", "Aktif", "fa.server", "#10b981")
+        ]
+        
+        for title, value, icon, color in stats:
+            card = self.create_stat_card(title, value, icon, color)
+            stats_layout.addWidget(card)
+            
+        layout.addLayout(stats_layout)
+        
+        # Recent scans table
+        self.scans_table = QTableWidget()
+        self.scans_table.setColumnCount(6)
+        self.scans_table.setHorizontalHeaderLabels([
+            "Hedef", "Tür", "Durum", "Zafiyet", "Tarih", "İşlemler"
+        ])
+        self.scans_table.horizontalHeader().setStretchLastSection(True)
+        
+        # Add sample data
+        self.add_sample_scans()
+        
+        layout.addWidget(self.scans_table)
+        
+        # Tools status
+        tools_group = QGroupBox("Kali Araçları Durumu")
+        tools_layout = QGridLayout()
+        
+        tools_status = [
+            ("Nmap", True), ("SQLMap", True), ("Metasploit", True),
+            ("Hydra", True), ("Burp Suite", False), ("Nikto", True),
+            ("Dirb", True), ("John", True), ("Aircrack", True)
+        ]
+        
+        for i, (tool, active) in enumerate(tools_status):
+            label = QLabel(tool)
+            status = QLabel("✓ Aktif" if active else "✗ Pasif")
+            status.setStyleSheet(f"color: {'#10b981' if active else '#ef4444'};")
+            tools_layout.addWidget(label, i // 3, (i % 3) * 2)
+            tools_layout.addWidget(status, i // 3, (i % 3) * 2 + 1)
+            
+        tools_group.setLayout(tools_layout)
+        layout.addWidget(tools_group)
+        
+        self.setLayout(layout)
+        
+    def create_stat_card(self, title, value, icon, color):
+        """Create a statistics card"""
+        card = QFrame()
+        card.setFrameStyle(QFrame.Box)
+        card.setStyleSheet(f"""
+            QFrame {{
+                border: 2px solid {color};
+                border-radius: 10px;
+                padding: 10px;
+                background-color: rgba(127, 57, 251, 0.1);
+            }}
+        """)
+        
+        layout = QVBoxLayout()
+        
+        icon_label = QLabel()
+        icon_label.setPixmap(qta.icon(icon, color=color).pixmap(32, 32))
+        icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon_label)
+        
+        title_label = QLabel(title)
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("color: #aaa; font-size: 12px;")
+        layout.addWidget(title_label)
+        
+        value_label = QLabel(value)
+        value_label.setAlignment(Qt.AlignCenter)
+        value_label.setStyleSheet(f"color: {color}; font-size: 24px; font-weight: bold;")
+        layout.addWidget(value_label)
+        
+        card.setLayout(layout)
+        return card
+        
+    def add_sample_scans(self):
+        """Add sample scan data to table"""
+        sample_data = [
+            ("example.com", "Full Scan", "Tamamlandı", "5 Kritik, 12 Orta", "2 saat önce"),
+            ("192.168.1.0/24", "Network", "%67", "Taranıyor...", "15 dakika önce"),
+            ("testsite.local", "Web App", "Tamamlandı", "3 Kritik, 8 Orta", "1 gün önce")
+        ]
+        
+        for row, data in enumerate(sample_data):
+            self.scans_table.insertRow(row)
+            for col, value in enumerate(data):
+                self.scans_table.setItem(row, col, QTableWidgetItem(value))
+                
+            # Add action buttons
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout()
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            
+            view_btn = QPushButton(qta.icon('fa.eye'), "")
+            view_btn.setMaximumWidth(30)
+            actions_layout.addWidget(view_btn)
+            
+            download_btn = QPushButton(qta.icon('fa.download'), "")
+            download_btn.setMaximumWidth(30)
+            actions_layout.addWidget(download_btn)
+            
+            actions_widget.setLayout(actions_layout)
+            self.scans_table.setCellWidget(row, 5, actions_widget)
+
+
+class MainWindow(QMainWindow):
+    """Main application window"""
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("Kali Security Platform v5.0 - Professional Edition")
+        self.setGeometry(100, 100, 1400, 900)
+        
+        # Set application icon
+        self.setWindowIcon(qta.icon('fa.shield-alt', color='#7f39fb'))
+        
+        # Apply dark theme
+        self.setStyleSheet(DARK_STYLE)
+        
+        # Create menu bar
+        self.create_menu_bar()
+        
+        # Create toolbar
+        self.create_toolbar()
+        
+        # Create central widget with tabs
+        self.tabs = QTabWidget()
+        
+        # Add tabs
+        self.dashboard_tab = DashboardWidget()
+        self.scan_tab = ScanWidget()
+        self.report_tab = self.create_report_tab()
+        self.tools_tab = self.create_tools_tab()
+        self.settings_tab = self.create_settings_tab()
+        
+        self.tabs.addTab(self.dashboard_tab, qta.icon('fa.tachometer-alt'), "Dashboard")
+        self.tabs.addTab(self.scan_tab, qta.icon('fa.radar'), "Tarama")
+        self.tabs.addTab(self.report_tab, qta.icon('fa.file-alt'), "Raporlar")
+        self.tabs.addTab(self.tools_tab, qta.icon('fa.tools'), "Araçlar")
+        self.tabs.addTab(self.settings_tab, qta.icon('fa.cog'), "Ayarlar")
+        
+        self.setCentralWidget(self.tabs)
+        
+        # Create status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Kali Security Platform v5.0 - Hazır")
+        
+        # Add system tray icon
+        self.create_system_tray()
+        
+    def create_menu_bar(self):
+        """Create menu bar"""
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("Dosya")
+        
+        new_scan = QAction(qta.icon('fa.plus'), "Yeni Tarama", self)
+        new_scan.setShortcut("Ctrl+N")
+        file_menu.addAction(new_scan)
+        
+        import_action = QAction(qta.icon('fa.file-import'), "İçe Aktar", self)
+        import_action.setShortcut("Ctrl+I")
+        file_menu.addAction(import_action)
+        
+        export_action = QAction(qta.icon('fa.file-export'), "Dışa Aktar", self)
+        export_action.setShortcut("Ctrl+E")
+        file_menu.addAction(export_action)
+        
+        file_menu.addSeparator()
+        
+        exit_action = QAction(qta.icon('fa.times'), "Çıkış", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("Araçlar")
+        
+        terminal_action = QAction(qta.icon('fa.terminal'), "Terminal", self)
+        terminal_action.setShortcut("Ctrl+T")
+        terminal_action.triggered.connect(self.open_terminal)
+        tools_menu.addAction(terminal_action)
+        
+        # View menu
+        view_menu = menubar.addMenu("Görünüm")
+        
+        fullscreen_action = QAction(qta.icon('fa.expand'), "Tam Ekran", self)
+        fullscreen_action.setShortcut("F11")
+        fullscreen_action.triggered.connect(self.toggle_fullscreen)
+        view_menu.addAction(fullscreen_action)
+        
+        # Help menu
+        help_menu = menubar.addMenu("Yardım")
+        
+        docs_action = QAction(qta.icon('fa.book'), "Dokümantasyon", self)
+        docs_action.setShortcut("F1")
+        help_menu.addAction(docs_action)
+        
+        about_action = QAction(qta.icon('fa.info-circle'), "Hakkında", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+        
+    def create_toolbar(self):
+        """Create toolbar"""
+        toolbar = self.addToolBar("Ana Araç Çubuğu")
+        toolbar.setMovable(False)
+        
+        # New scan
+        new_scan_action = QAction(qta.icon('fa.plus', color='white'), "Yeni Tarama", self)
+        toolbar.addAction(new_scan_action)
+        
+        # Start scan
+        start_action = QAction(qta.icon('fa.play', color='#10b981'), "Başlat", self)
+        toolbar.addAction(start_action)
+        
+        # Stop scan
+        stop_action = QAction(qta.icon('fa.stop', color='#ef4444'), "Durdur", self)
+        toolbar.addAction(stop_action)
+        
+        toolbar.addSeparator()
+        
+        # Terminal
+        terminal_action = QAction(qta.icon('fa.terminal', color='white'), "Terminal", self)
+        terminal_action.triggered.connect(self.open_terminal)
+        toolbar.addAction(terminal_action)
+        
+        # Reports
+        reports_action = QAction(qta.icon('fa.file-alt', color='white'), "Raporlar", self)
+        toolbar.addAction(reports_action)
+        
+        toolbar.addSeparator()
+        
+        # Settings
+        settings_action = QAction(qta.icon('fa.cog', color='white'), "Ayarlar", self)
+        toolbar.addAction(settings_action)
+        
+    def create_report_tab(self):
+        """Create reports tab"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Report filters
+        filter_layout = QHBoxLayout()
+        
+        search_input = QLineEdit()
+        search_input.setPlaceholderText("Rapor ara...")
+        filter_layout.addWidget(search_input)
+        
+        severity_combo = QComboBox()
+        severity_combo.addItems(["Tümü", "Kritik", "Yüksek", "Orta", "Düşük"])
+        filter_layout.addWidget(severity_combo)
+        
+        date_input = QDateEdit()
+        date_input.setCalendarPopup(True)
+        date_input.setDate(QDate.currentDate())
+        filter_layout.addWidget(date_input)
+        
+        filter_btn = QPushButton(qta.icon('fa.filter'), "Filtrele")
+        filter_layout.addWidget(filter_btn)
+        
+        layout.addLayout(filter_layout)
+        
+        # Reports table
+        reports_table = QTableWidget()
+        reports_table.setColumnCount(6)
+        reports_table.setHorizontalHeaderLabels([
+            "Rapor ID", "Hedef", "Tarih", "Kritiklik", "Format", "İşlemler"
+        ])
+        
+        layout.addWidget(reports_table)
+        
+        widget.setLayout(layout)
+        return widget
+        
+    def create_tools_tab(self):
+        """Create tools management tab"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Tools grid
+        tools_grid = QGridLayout()
+        
+        tools = [
+            ("Nmap", "fa.network-wired", "#3b82f6"),
+            ("SQLMap", "fa.database", "#eab308"),
+            ("Metasploit", "fa.bomb", "#ef4444"),
+            ("Hydra", "fa.key", "#a855f7"),
+            ("Burp Suite", "fa.globe", "#22c55e"),
+            ("Nikto", "fa.search", "#f97316"),
+            ("Dirb", "fa.folder", "#ec4899"),
+            ("John", "fa.lock", "#14b8a6"),
+            ("Aircrack", "fa.wifi", "#6366f1")
+        ]
+        
+        for i, (name, icon, color) in enumerate(tools):
+            tool_widget = self.create_tool_widget(name, icon, color)
+            tools_grid.addWidget(tool_widget, i // 3, i % 3)
+            
+        layout.addLayout(tools_grid)
+        
+        widget.setLayout(layout)
+        return widget
+        
+    def create_tool_widget(self, name, icon, color):
+        """Create a tool widget card"""
+        frame = QFrame()
+        frame.setFrameStyle(QFrame.Box)
+        frame.setStyleSheet(f"""
+            QFrame {{
+                border: 2px solid {color};
+                border-radius: 10px;
+                padding: 20px;
+            }}
+        """)
+        
+        layout = QVBoxLayout()
+        
+        # Icon
+        icon_label = QLabel()
+        icon_label.setPixmap(qta.icon(icon, color=color).pixmap(48, 48))
+        icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon_label)
+        
+        # Name
+        name_label = QLabel(name)
+        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        layout.addWidget(name_label)
+        
+        # Status
+        status_label = QLabel("✓ Aktif")
+        status_label.setAlignment(Qt.AlignCenter)
+        status_label.setStyleSheet("color: #10b981;")
+        layout.addWidget(status_label)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        run_btn = QPushButton("Çalıştır")
+        run_btn.setStyleSheet(f"background-color: {color};")
+        button_layout.addWidget(run_btn)
+        
+        config_btn = QPushButton("Ayarlar")
+        button_layout.addWidget(config_btn)
+        
+        layout.addLayout(button_layout)
+        
+        frame.setLayout(layout)
+        return frame
+        
+    def create_settings_tab(self):
+        """Create settings tab"""
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Settings categories
+        settings_tabs = QTabWidget()
+        
+        # General settings
+        general_widget = QWidget()
+        general_layout = QFormLayout()
+        
+        general_layout.addRow("Dil:", QComboBox())
+        general_layout.addRow("Tema:", QComboBox())
+        general_layout.addRow("Otomatik Başlat:", QCheckBox())
+        general_layout.addRow("Bildirimleri Etkinleştir:", QCheckBox())
+        
+        general_widget.setLayout(general_layout)
+        settings_tabs.addTab(general_widget, "Genel")
+        
+        # Network settings
+        network_widget = QWidget()
+        network_layout = QFormLayout()
+        
+        network_layout.addRow("Proxy Sunucu:", QLineEdit())
+        network_layout.addRow("Proxy Port:", QSpinBox())
+        network_layout.addRow("Timeout (sn):", QSpinBox())
+        network_layout.addRow("Max Thread:", QSpinBox())
+        
+        network_widget.setLayout(network_layout)
+        settings_tabs.addTab(network_widget, "Ağ")
+        
+        # Security settings
+        security_widget = QWidget()
+        security_layout = QFormLayout()
+        
+        security_layout.addRow("SSL Doğrulama:", QCheckBox())
+        security_layout.addRow("API Key:", QLineEdit())
+        security_layout.addRow("2FA Etkin:", QCheckBox())
+        
+        security_widget.setLayout(security_layout)
+        settings_tabs.addTab(security_widget, "Güvenlik")
+        
+        layout.addWidget(settings_tabs)
+        
+        # Save button
+        save_btn = QPushButton(qta.icon('fa.save'), "Ayarları Kaydet")
+        save_btn.setStyleSheet("background-color: #10b981;")
+        layout.addWidget(save_btn)
+        
+        widget.setLayout(layout)
+        return widget
+        
+    def create_system_tray(self):
+        """Create system tray icon"""
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(qta.icon('fa.shield-alt', color='#7f39fb'))
+        
+        # Tray menu
+        tray_menu = QMenu()
+        
+        show_action = QAction("Göster", self)
+        show_action.triggered.connect(self.show)
+        tray_menu.addAction(show_action)
+        
+        hide_action = QAction("Gizle", self)
+        hide_action.triggered.connect(self.hide)
+        tray_menu.addAction(hide_action)
+        
+        tray_menu.addSeparator()
+        
+        exit_action = QAction("Çıkış", self)
+        exit_action.triggered.connect(self.close)
+        tray_menu.addAction(exit_action)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+        
+    def open_terminal(self):
+        """Open terminal dialog"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Terminal")
+        dialog.setGeometry(200, 200, 800, 600)
+        
+        layout = QVBoxLayout()
+        
+        terminal = QPlainTextEdit()
+        terminal.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #000;
+                color: #0f0;
+                font-family: 'Consolas', monospace;
+                font-size: 14px;
+            }
+        """)
+        terminal.setPlainText("$ kali-security-platform\n")
+        
+        layout.addWidget(terminal)
+        
+        dialog.setLayout(layout)
+        dialog.exec_()
+        
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode"""
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+            
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(self, "Hakkında",
+            """<h2>Kali Security Platform v5.0</h2>
+            <p>Professional Penetration Testing Framework</p>
+            <p>Full Kali Linux Tools Integration</p>
+            <br>
+            <p><b>Geliştirici:</b> Anti-Security Team</p>
+            <p><b>Lisans:</b> GPL-3.0</p>
+            <br>
+            <p><i>"Bozmadan düzeltemezsin, önce bozmayı öğren!"</i></p>
+            """)
+            
+    def closeEvent(self, event):
+        """Handle close event"""
+        reply = QMessageBox.question(self, 'Çıkış',
+            'Uygulamadan çıkmak istediğinize emin misiniz?',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No)
+            
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
+
+def main():
+    """Main entry point"""
+    app = QApplication(sys.argv)
+    app.setApplicationName("Kali Security Platform")
+    app.setOrganizationName("Anti-Security")
+    
+    # Set application style
+    app.setStyle('Fusion')
+    
+    # Create and show main window
+    window = MainWindow()
+    window.show()
+    
+    sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
